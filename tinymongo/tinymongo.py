@@ -434,7 +434,6 @@ class TinyMongoCollection(object):
         if filter is None:
             result = self.table.all()
         else:
-            import pudb; pu.db
             doc_ids, allcond = self.parse_query(filter)
 
             try:
