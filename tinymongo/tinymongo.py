@@ -231,10 +231,19 @@ class TinyMongoCollection(object):
         :return: composite Query()
         """
         logger.debug(u'query to parse2: {}'.format(query))
-
+		
         # this should find all records
         if query == {} or query is None:
-            return Query()._id != u'-1'  # noqa
+            return None,Query()._id != u'-1'  # noqa
+
+        # If the query includes id and the value is not a dict (it's a simple id =) pop it
+        # and return it as the doc_id list.
+        doc_ids = None
+        if query.get('_id') and not isinstance(query.get('_id'),dict):
+            doc_ids = [query.pop('_id')]
+
+        if len(query) == 0:
+            return doc_ids,None
 
         q = None
         # find the final result of the generator
@@ -246,7 +255,7 @@ class TinyMongoCollection(object):
 
         logger.debug(u'new query item2: {}'.format(q))
 
-        return q
+        return doc_ids,q
 
     def parse_condition(self, query, prev_key=None, last_prev_key=None):
         """
@@ -400,10 +409,10 @@ class TinyMongoCollection(object):
         if u"$set" in doc:
             doc = doc[u"$set"]
 
-        allcond = self.parse_query(query)
+        doc_ids, allcond = self.parse_query(query)
 
         try:
-            result = self.table.update(doc, allcond)
+            result = self.table.update(doc, allcond, doc_ids=docids)
         except:
             # TODO: check table.update result
             # check what pymongo does in that case
@@ -425,10 +434,11 @@ class TinyMongoCollection(object):
         if filter is None:
             result = self.table.all()
         else:
-            allcond = self.parse_query(filter)
+            import pudb; pu.db
+            doc_ids, allcond = self.parse_query(filter)
 
             try:
-                result = self.table.search(allcond)
+                result = self.table.search(allcond,doc_ids=doc_ids)
             except (AttributeError, TypeError):
                 result = []
 
@@ -452,9 +462,9 @@ class TinyMongoCollection(object):
         if self.table is None:
             self.build_table()
 
-        allcond = self.parse_query(filter)
+        doc_ids, allcond = self.parse_query(filter)
 
-        return self.table.get(allcond)
+        return self.table.get(allcond,doc_ids=doc_ids)
 
     def remove(self, spec_or_id, multi=True, *args, **kwargs):
         """Backwards compatibility with remove"""
@@ -469,8 +479,8 @@ class TinyMongoCollection(object):
         :param query: dictionary representing the mongo query
         :return: DeleteResult
         """
-        item = self.find_one(query)
-        result = self.table.remove(where(u'_id') == item[u'_id'])
+        _id = query.get('_id',self.find_one(query))
+        result = self.table.remove(where(u'_id') == _id)
 
         return DeleteResult(raw_result=result)
 
